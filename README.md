@@ -2,7 +2,7 @@
 
 A command palette extension for [pi](https://github.com/badlogic/pi-mono) coding agent.
 
-Press `Ctrl+Shift+P` to open a full-screen two-panel browser with two tabs:
+Press `Ctrl+Shift+K` to open a centered overlay panel with two tabs:
 
 ## Panels
 
@@ -20,7 +20,7 @@ Press `Ctrl+Shift+P` to open a full-screen two-panel browser with two tabs:
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+Shift+P` | Open Commander |
+| `Ctrl+Shift+K` | Open Commander |
 | `1` / `2` | Switch to Peak / Session tab |
 | `Tab` / `Shift+Tab` | Cycle tabs |
 | `↑` / `↓` / `j` / `k` | Navigate list |

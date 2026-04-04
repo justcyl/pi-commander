@@ -1,7 +1,7 @@
 /**
  * Commander Extension for pi
  *
- * Ctrl+Shift+P opens a full-screen command palette with two panels:
+ * Ctrl+Shift+K opens an overlay command palette with two panels:
  * - Peak: Browse conversation turns (left: user message anchors, right: full turn preview)
  * - Session: Browse and switch sessions (left: session list, right: preview)
  *
@@ -326,12 +326,12 @@ class CommanderComponent implements Component {
     }
   }
 
-  private getListHeight(): number {
-    // Total height minus tab bar (1) + border (1) + search bar (1) + help (1) + border (1)
-    return Math.max(5, (this.lastHeight || 24) - 5);
-  }
+  // Fixed content height for the overlay panel
+  private static readonly CONTENT_HEIGHT = 20;
 
-  private lastHeight = 24;
+  private getListHeight(): number {
+    return CommanderComponent.CONTENT_HEIGHT;
+  }
 
   // ─── Rendering ──────────────────────────────────────────────
 
@@ -339,9 +339,6 @@ class CommanderComponent implements Component {
     if (this.cachedLines && this.cachedWidth === width) {
       return this.cachedLines;
     }
-
-    const termHeight = (this.tui as any).height || 30;
-    this.lastHeight = termHeight;
 
     const lines: string[] = [];
     const theme = this.theme;
@@ -357,7 +354,7 @@ class CommanderComponent implements Component {
     lines.push(theme.fg("border", "─".repeat(width)));
 
     // ─ Content area
-    const contentHeight = termHeight - 5; // borders + tab + search + help
+    const contentHeight = CommanderComponent.CONTENT_HEIGHT;
     const leftWidth = Math.floor(width * this.leftPaneRatio);
     const rightWidth = width - leftWidth - 1; // 1 for separator
 
@@ -666,7 +663,7 @@ export default function commander(pi: ExtensionAPI) {
       // Sessions might not be available
     }
 
-    // Show the commander UI
+    // Show the commander UI as overlay
     await ctx.ui.custom<any>((tui, theme, _kb, done) => {
       const component = new CommanderComponent(tui, theme, done, {
         turns,
@@ -685,11 +682,19 @@ export default function commander(pi: ExtensionAPI) {
           tui.requestRender();
         },
       };
+    }, {
+      overlay: true,
+      overlayOptions: {
+        anchor: "center",
+        width: "80%",
+        minWidth: 60,
+        maxHeight: "80%",
+      },
     });
   }
 
   // Register shortcut
-  pi.registerShortcut(Key.ctrlShift("p"), {
+  pi.registerShortcut(Key.ctrlShift("k"), {
     description: "Open Commander palette",
     handler: async (ctx) => {
       await openCommander(ctx);
