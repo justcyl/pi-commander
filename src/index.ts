@@ -95,6 +95,9 @@ class CommanderComponent implements Component {
   // Layout
   private leftPaneRatio = 0.35;
 
+  // Content height for the overlay (rows of list items visible)
+  private static readonly CONTENT_HEIGHT = 12;
+
   constructor(
     tui: TUI,
     theme: any,
@@ -326,9 +329,6 @@ class CommanderComponent implements Component {
     }
   }
 
-  // Fixed content height for the overlay panel
-  private static readonly CONTENT_HEIGHT = 20;
-
   private getListHeight(): number {
     return CommanderComponent.CONTENT_HEIGHT;
   }
@@ -343,15 +343,18 @@ class CommanderComponent implements Component {
     const lines: string[] = [];
     const theme = this.theme;
 
-    // ─ Top border
-    lines.push(theme.fg("accent", "─".repeat(width)));
+    // ─ Top border with title
+    const title = " Commander ";
+    const borderChar = "─";
+    const titleBorder = borderChar.repeat(2) + title + borderChar.repeat(Math.max(0, width - 2 - visibleWidth(title)));
+    lines.push(padToWidth(theme.fg("accent", titleBorder), width));
 
-    // ─ Tab bar
-    const tabLine = this.renderTabBar(width);
-    lines.push(tabLine);
+    // ─ Tab bar (padded to full width)
+    const tabContent = this.renderTabBar();
+    lines.push(padToWidth(tabContent, width));
 
     // ─ Separator
-    lines.push(theme.fg("border", "─".repeat(width)));
+    lines.push(padToWidth(theme.fg("border", "─".repeat(width)), width));
 
     // ─ Content area
     const contentHeight = CommanderComponent.CONTENT_HEIGHT;
@@ -367,19 +370,18 @@ class CommanderComponent implements Component {
       const left = leftLines[i] || "";
       const right = rightLines[i] || "";
       const leftPadded = padToWidth(left, leftWidth);
-      const rightTruncated = truncateToWidth(right, rightWidth);
-      lines.push(leftPadded + sep + rightTruncated);
+      const rightPadded = padToWidth(right, rightWidth);
+      lines.push(leftPadded + sep + rightPadded);
     }
 
-    // ─ Search bar / help
+    // ─ Search bar / help (padded to full width)
     if (this.isSearchMode()) {
       const query =
         this.activeTab === "peak"
           ? this.peakSearchQuery
           : this.sessionSearchQuery;
-      lines.push(
-        theme.fg("accent", " 🔍 ") + query + theme.fg("dim", "█")
-      );
+      const searchLine = theme.fg("accent", " 🔍 ") + query + theme.fg("dim", "█");
+      lines.push(padToWidth(searchLine, width));
     } else {
       const helpParts = [
         "↑↓/jk navigate",
@@ -390,18 +392,18 @@ class CommanderComponent implements Component {
       if (this.activeTab === "session") {
         helpParts.splice(2, 0, "Enter switch");
       }
-      lines.push(theme.fg("dim", " " + helpParts.join(" · ")));
+      lines.push(padToWidth(theme.fg("dim", " " + helpParts.join(" · ")), width));
     }
 
     // ─ Bottom border
-    lines.push(theme.fg("accent", "─".repeat(width)));
+    lines.push(padToWidth(theme.fg("accent", "─".repeat(width)), width));
 
     this.cachedWidth = width;
     this.cachedLines = lines;
     return lines;
   }
 
-  private renderTabBar(width: number): string {
+  private renderTabBar(): string {
     const theme = this.theme;
     const parts: string[] = [];
 
@@ -465,7 +467,7 @@ class CommanderComponent implements Component {
       const truncated = truncateToWidth(text, width);
 
       if (isSelected) {
-        lines.push(theme.bg("selectedBg", theme.fg("accent", truncated)));
+        lines.push(padToWidth(theme.bg("selectedBg", theme.fg("accent", truncated)), width));
       } else {
         lines.push(theme.fg("text", truncated));
       }
@@ -559,13 +561,25 @@ class CommanderComponent implements Component {
       const globalIdx = this.sessionScrollOffset + i;
       const isSelected = globalIdx === this.sessionSelectedIndex;
       const item = formatSessionList(session);
-      const text = ` ${item.label}`;
+      // Show label + meta (msg count & time) on same line
+      const meta = item.meta;
+      const maxLabelWidth = width - visibleWidth(meta) - 3; // " label  meta"
+      const label = maxLabelWidth > 10
+        ? truncateToWidth(item.label, maxLabelWidth)
+        : item.label;
+      const labelVis = visibleWidth(label);
+      const gap = Math.max(1, width - 1 - labelVis - visibleWidth(meta));
+      const text = ` ${label}${" ".repeat(gap)}${meta}`;
       const truncated = truncateToWidth(text, width);
 
       if (isSelected) {
-        lines.push(theme.bg("selectedBg", theme.fg("accent", truncated)));
+        lines.push(padToWidth(theme.bg("selectedBg", theme.fg("accent", truncated)), width));
       } else {
-        lines.push(theme.fg("text", truncated));
+        // Label in normal color, meta in dim
+        const labelPart = truncateToWidth(` ${label}`, width - visibleWidth(meta) - 1);
+        const dimMeta = theme.fg("dim", " " + meta);
+        const combined = labelPart + " ".repeat(Math.max(0, width - visibleWidth(labelPart) - visibleWidth(meta) - 1)) + dimMeta;
+        lines.push(truncateToWidth(combined, width));
       }
     }
 
