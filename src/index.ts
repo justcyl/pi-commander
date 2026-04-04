@@ -62,6 +62,26 @@ const TABS: Tab[] = [
   { id: "session", label: "Session" },
 ];
 
+// ─── Utilities ─────────────────────────────────────────────────────
+
+/** Pad (or truncate) a string to exactly the given visible width. */
+function padToWidth(content: string, targetWidth: number): string {
+  const truncated = truncateToWidth(content, targetWidth, "");
+  const currentWidth = visibleWidth(truncated);
+  const padding = Math.max(0, targetWidth - currentWidth);
+  return truncated + " ".repeat(padding);
+}
+
+/**
+ * Wrap content inside side borders, padding to fill innerWidth.
+ * Produces: │ content + padding │
+ */
+function boxLine(content: string, innerWidth: number, side: string): string {
+  const contentWidth = visibleWidth(content);
+  const padding = Math.max(0, innerWidth - contentWidth);
+  return side + content + " ".repeat(padding) + side;
+}
+
 // ─── Main Commander Component ────────────────────────────────────────
 
 class CommanderComponent implements Component {
@@ -343,45 +363,51 @@ class CommanderComponent implements Component {
     const lines: string[] = [];
     const theme = this.theme;
 
-    // ─ Top border with title
+    // innerWidth = width minus 2 side border chars (│)
+    const innerWidth = Math.max(1, width - 2);
+    const side = theme.fg("border", "│");
+    const bdr = (s: string) => theme.fg("border", s);
+    const acc = (s: string) => theme.fg("accent", s);
+
+    // ─ Top border: ╭── Commander ──...──╮
     const title = " Commander ";
-    const borderChar = "─";
-    const titleBorder = borderChar.repeat(2) + title + borderChar.repeat(Math.max(0, width - 2 - visibleWidth(title)));
-    lines.push(padToWidth(theme.fg("accent", titleBorder), width));
+    const titleLen = visibleWidth(title);
+    const topRemain = Math.max(0, innerWidth - 1 - titleLen);
+    lines.push(
+      bdr("╭") + bdr("─") + acc(title) + bdr("─".repeat(topRemain)) + bdr("╮")
+    );
 
-    // ─ Tab bar (padded to full width)
+    // ─ Tab bar
     const tabContent = this.renderTabBar();
-    lines.push(padToWidth(tabContent, width));
+    lines.push(boxLine(tabContent, innerWidth, side));
 
-    // ─ Separator
-    lines.push(padToWidth(theme.fg("border", "─".repeat(width)), width));
+    // ─ Separator: ├──────┤
+    lines.push(bdr("├") + bdr("─".repeat(innerWidth)) + bdr("┤"));
 
-    // ─ Content area
+    // ─ Content area (two-pane)
     const contentHeight = CommanderComponent.CONTENT_HEIGHT;
-    const leftWidth = Math.floor(width * this.leftPaneRatio);
-    const rightWidth = width - leftWidth - 1; // 1 for separator
+    const leftWidth = Math.floor(innerWidth * this.leftPaneRatio);
+    const rightWidth = innerWidth - leftWidth - 1; // 1 for middle separator
 
     const leftLines = this.renderLeftPane(leftWidth, contentHeight);
     const rightLines = this.renderRightPane(rightWidth, contentHeight);
 
-    // Merge left and right panes side by side
-    const sep = theme.fg("border", "│");
+    // Merge left and right panes side by side, wrapped in side borders
+    const midSep = bdr("│");
     for (let i = 0; i < contentHeight; i++) {
-      const left = leftLines[i] || "";
-      const right = rightLines[i] || "";
-      const leftPadded = padToWidth(left, leftWidth);
-      const rightPadded = padToWidth(right, rightWidth);
-      lines.push(leftPadded + sep + rightPadded);
+      const left = padToWidth(leftLines[i] || "", leftWidth);
+      const right = padToWidth(rightLines[i] || "", rightWidth);
+      lines.push(side + left + midSep + right + side);
     }
 
-    // ─ Search bar / help (padded to full width)
+    // ─ Search bar / help
     if (this.isSearchMode()) {
       const query =
         this.activeTab === "peak"
           ? this.peakSearchQuery
           : this.sessionSearchQuery;
-      const searchLine = theme.fg("accent", " 🔍 ") + query + theme.fg("dim", "█");
-      lines.push(padToWidth(searchLine, width));
+      const searchContent = acc(" 🔍 ") + query + theme.fg("dim", "█");
+      lines.push(boxLine(searchContent, innerWidth, side));
     } else {
       const helpParts = [
         "↑↓/jk navigate",
@@ -392,11 +418,12 @@ class CommanderComponent implements Component {
       if (this.activeTab === "session") {
         helpParts.splice(2, 0, "Enter switch");
       }
-      lines.push(padToWidth(theme.fg("dim", " " + helpParts.join(" · ")), width));
+      const helpContent = theme.fg("dim", " " + helpParts.join(" · "));
+      lines.push(boxLine(helpContent, innerWidth, side));
     }
 
-    // ─ Bottom border
-    lines.push(padToWidth(theme.fg("accent", "─".repeat(width)), width));
+    // ─ Bottom border: ╰──────╯
+    lines.push(bdr("╰") + bdr("─".repeat(innerWidth)) + bdr("╯"));
 
     this.cachedWidth = width;
     this.cachedLines = lines;
@@ -464,16 +491,14 @@ class CommanderComponent implements Component {
       const isSelected = globalIdx === this.peakSelectedIndex;
       const turnNum = `#${anchor.turnIndex + 1}`;
       const text = ` ${turnNum} ${anchor.preview}`;
-      const truncated = truncateToWidth(text, width);
 
       if (isSelected) {
-        lines.push(padToWidth(theme.bg("selectedBg", theme.fg("accent", truncated)), width));
+        lines.push(theme.bg("selectedBg", theme.fg("accent", padToWidth(text, width))));
       } else {
-        lines.push(theme.fg("text", truncated));
+        lines.push(theme.fg("text", truncateToWidth(text, width)));
       }
     }
 
-    // Pad
     while (lines.length < height) lines.push("");
 
     // Scroll indicator
@@ -482,12 +507,7 @@ class CommanderComponent implements Component {
         this.peakScrollOffset + height,
         items.length
       )}/${items.length}`;
-      if (lines.length > 0) {
-        lines[lines.length - 1] = truncateToWidth(
-          theme.fg("dim", ` ${indicator}`),
-          width
-        );
-      }
+      lines[lines.length - 1] = theme.fg("dim", padToWidth(` ${indicator}`, width));
     }
 
     return lines;
@@ -509,7 +529,6 @@ class CommanderComponent implements Component {
     const preview = formatTurnPreview(turn, width);
     const previewLines = preview.split("\n");
 
-    // Apply basic styling
     const styled: string[] = [];
     for (const line of previewLines) {
       if (line.startsWith("┌ User")) {
@@ -534,7 +553,6 @@ class CommanderComponent implements Component {
       }
     }
 
-    // Truncate to height
     return styled.slice(0, height);
   }
 
@@ -561,25 +579,21 @@ class CommanderComponent implements Component {
       const globalIdx = this.sessionScrollOffset + i;
       const isSelected = globalIdx === this.sessionSelectedIndex;
       const item = formatSessionList(session);
-      // Show label + meta (msg count & time) on same line
+
+      // Show label + meta (msg count & time)
       const meta = item.meta;
-      const maxLabelWidth = width - visibleWidth(meta) - 3; // " label  meta"
-      const label = maxLabelWidth > 10
-        ? truncateToWidth(item.label, maxLabelWidth)
-        : item.label;
-      const labelVis = visibleWidth(label);
-      const gap = Math.max(1, width - 1 - labelVis - visibleWidth(meta));
-      const text = ` ${label}${" ".repeat(gap)}${meta}`;
-      const truncated = truncateToWidth(text, width);
+      const metaWidth = visibleWidth(meta);
+      const maxLabelWidth = Math.max(10, width - metaWidth - 3);
+      const label = truncateToWidth(item.label, maxLabelWidth, "");
+      const labelWidth = visibleWidth(label);
+      const gap = Math.max(1, width - 1 - labelWidth - metaWidth);
 
       if (isSelected) {
-        lines.push(padToWidth(theme.bg("selectedBg", theme.fg("accent", truncated)), width));
+        const text = ` ${label}${" ".repeat(gap)}${meta}`;
+        lines.push(theme.bg("selectedBg", theme.fg("accent", padToWidth(text, width))));
       } else {
-        // Label in normal color, meta in dim
-        const labelPart = truncateToWidth(` ${label}`, width - visibleWidth(meta) - 1);
-        const dimMeta = theme.fg("dim", " " + meta);
-        const combined = labelPart + " ".repeat(Math.max(0, width - visibleWidth(labelPart) - visibleWidth(meta) - 1)) + dimMeta;
-        lines.push(truncateToWidth(combined, width));
+        const text = ` ${label}${" ".repeat(gap)}${theme.fg("dim", meta)}`;
+        lines.push(truncateToWidth(text, width));
       }
     }
 
@@ -590,12 +604,7 @@ class CommanderComponent implements Component {
         this.sessionScrollOffset + height,
         items.length
       )}/${items.length}`;
-      if (lines.length > 0) {
-        lines[lines.length - 1] = truncateToWidth(
-          theme.fg("dim", ` ${indicator}`),
-          width
-        );
-      }
+      lines[lines.length - 1] = theme.fg("dim", padToWidth(` ${indicator}`, width));
     }
 
     return lines;
@@ -613,7 +622,6 @@ class CommanderComponent implements Component {
 
     const preview = formatSessionPreview(session, width);
 
-    // Apply styling
     const styled: string[] = [];
     for (const line of preview) {
       if (line.startsWith("📌") || line.startsWith("📁") || line.startsWith("💬") || line.startsWith("📅") || line.startsWith("🔗")) {
@@ -634,14 +642,6 @@ class CommanderComponent implements Component {
     this.cachedWidth = undefined;
     this.cachedLines = undefined;
   }
-}
-
-// ─── Utilities ─────────────────────────────────────────────────────
-
-function padToWidth(str: string, width: number): string {
-  const visible = visibleWidth(str);
-  if (visible >= width) return truncateToWidth(str, width);
-  return str + " ".repeat(width - visible);
 }
 
 // ─── Extension Entry Point ─────────────────────────────────────────
@@ -699,7 +699,8 @@ export default function commander(pi: ExtensionAPI) {
     }, {
       overlay: true,
       overlayOptions: {
-        anchor: "center",
+        anchor: "top-center",
+        offsetY: 3,
         width: "80%",
         minWidth: 60,
         maxHeight: "80%",
