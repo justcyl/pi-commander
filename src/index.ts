@@ -13,18 +13,12 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
+import type { Theme } from "@mariozechner/pi-coding-agent";
 import {
-  DynamicBorder,
   SessionManager,
-  getMarkdownTheme,
 } from "@mariozechner/pi-coding-agent";
 import {
-  Container,
-  Input,
   Key,
-  Markdown,
-  Spacer,
-  Text,
   matchesKey,
   truncateToWidth,
   visibleWidth,
@@ -62,31 +56,61 @@ const TABS: Tab[] = [
   { id: "session", label: "Session" },
 ];
 
-// ─── Utilities ─────────────────────────────────────────────────────
+// ─── Render helpers (pi-subagents pattern) ────────────────────────────
 
-/** Pad (or truncate) a string to exactly the given visible width. */
-function padToWidth(content: string, targetWidth: number): string {
-  const truncated = truncateToWidth(content, targetWidth, "");
-  const currentWidth = visibleWidth(truncated);
-  const padding = Math.max(0, targetWidth - currentWidth);
-  return truncated + " ".repeat(padding);
+/** Pad string to exactly `len` visible width. */
+function pad(s: string, len: number): string {
+  const vis = visibleWidth(s);
+  if (vis >= len) return truncateToWidth(s, len, "");
+  return s + " ".repeat(len - vis);
 }
 
-/**
- * Wrap content inside side borders, padding to fill innerWidth.
- * Produces: │ content + padding │
- */
-function boxLine(content: string, innerWidth: number, side: string): string {
-  const contentWidth = visibleWidth(content);
-  const padding = Math.max(0, innerWidth - contentWidth);
-  return side + content + " ".repeat(padding) + side;
+/** Wrap content in │ side borders, padded to fill innerW. */
+function row(content: string, width: number, theme: Theme): string {
+  const innerW = width - 2;
+  return theme.fg("border", "│") + pad(content, innerW) + theme.fg("border", "│");
+}
+
+/** Top border: ╭── title ──╮ */
+function renderHeader(text: string, width: number, theme: Theme): string {
+  const innerW = width - 2;
+  const padLen = Math.max(0, innerW - visibleWidth(text));
+  const padLeft = Math.floor(padLen / 2);
+  const padRight = padLen - padLeft;
+  return (
+    theme.fg("border", "╭" + "─".repeat(padLeft)) +
+    theme.fg("accent", text) +
+    theme.fg("border", "─".repeat(padRight) + "╮")
+  );
+}
+
+/** Bottom border: ╰── text ──╯ */
+function renderFooter(text: string, width: number, theme: Theme): string {
+  const innerW = width - 2;
+  const padLen = Math.max(0, innerW - visibleWidth(text));
+  const padLeft = Math.floor(padLen / 2);
+  const padRight = padLen - padLeft;
+  return (
+    theme.fg("border", "╰" + "─".repeat(padLeft)) +
+    theme.fg("dim", text) +
+    theme.fg("border", "─".repeat(padRight) + "╯")
+  );
+}
+
+/** Separator: ├────────┤ */
+function renderSeparator(width: number, theme: Theme): string {
+  const innerW = width - 2;
+  return theme.fg("border", "├" + "─".repeat(innerW) + "┤");
 }
 
 // ─── Main Commander Component ────────────────────────────────────────
 
+const OVERLAY_WIDTH = 100;
+const CONTENT_HEIGHT = 14;
+
 class CommanderComponent implements Component {
   private tui: TUI;
-  private theme: any;
+  private theme: Theme;
   private done: (result: any) => void;
 
   private activeTab: TabId;
@@ -104,7 +128,6 @@ class CommanderComponent implements Component {
 
   // Session state
   private sessions: SessionItem[] = [];
-  private sessionItems: SessionListItem[] = [];
   private filteredSessions: SessionItem[] = [];
   private sessionSelectedIndex = 0;
   private sessionScrollOffset = 0;
@@ -115,12 +138,9 @@ class CommanderComponent implements Component {
   // Layout
   private leftPaneRatio = 0.35;
 
-  // Content height for the overlay (rows of list items visible)
-  private static readonly CONTENT_HEIGHT = 12;
-
   constructor(
     tui: TUI,
-    theme: any,
+    theme: Theme,
     done: (result: any) => void,
     options: {
       turns: Turn[];
@@ -143,7 +163,6 @@ class CommanderComponent implements Component {
     // Init session data
     this.sessions = options.sessions;
     this.filteredSessions = [...this.sessions];
-    this.sessionItems = this.sessions.map((s) => formatSessionList(s));
   }
 
   handleInput(data: string): void {
@@ -332,72 +351,58 @@ class CommanderComponent implements Component {
   // ─── Scroll management ─────────────────────────────────────
 
   private adjustPeakScroll(): void {
-    const visibleHeight = this.getListHeight();
     if (this.peakSelectedIndex < this.peakScrollOffset) {
       this.peakScrollOffset = this.peakSelectedIndex;
-    } else if (this.peakSelectedIndex >= this.peakScrollOffset + visibleHeight) {
-      this.peakScrollOffset = this.peakSelectedIndex - visibleHeight + 1;
+    } else if (this.peakSelectedIndex >= this.peakScrollOffset + CONTENT_HEIGHT) {
+      this.peakScrollOffset = this.peakSelectedIndex - CONTENT_HEIGHT + 1;
     }
   }
 
   private adjustSessionScroll(): void {
-    const visibleHeight = this.getListHeight();
     if (this.sessionSelectedIndex < this.sessionScrollOffset) {
       this.sessionScrollOffset = this.sessionSelectedIndex;
-    } else if (this.sessionSelectedIndex >= this.sessionScrollOffset + visibleHeight) {
-      this.sessionScrollOffset = this.sessionSelectedIndex - visibleHeight + 1;
+    } else if (this.sessionSelectedIndex >= this.sessionScrollOffset + CONTENT_HEIGHT) {
+      this.sessionScrollOffset = this.sessionSelectedIndex - CONTENT_HEIGHT + 1;
     }
-  }
-
-  private getListHeight(): number {
-    return CommanderComponent.CONTENT_HEIGHT;
   }
 
   // ─── Rendering ──────────────────────────────────────────────
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedWidth === width) {
+    const w = Math.min(width, OVERLAY_WIDTH);
+
+    if (this.cachedLines && this.cachedWidth === w) {
       return this.cachedLines;
     }
 
     const lines: string[] = [];
     const theme = this.theme;
+    const innerW = w - 2; // inside │ ... │
 
-    // innerWidth = width minus 2 side border chars (│)
-    const innerWidth = Math.max(1, width - 2);
-    const side = theme.fg("border", "│");
-    const bdr = (s: string) => theme.fg("border", s);
-    const acc = (s: string) => theme.fg("accent", s);
-
-    // ─ Top border: ╭── Commander ──...──╮
-    const title = " Commander ";
-    const titleLen = visibleWidth(title);
-    const topRemain = Math.max(0, innerWidth - 1 - titleLen);
-    lines.push(
-      bdr("╭") + bdr("─") + acc(title) + bdr("─".repeat(topRemain)) + bdr("╮")
-    );
+    // ─ Header: ╭── Commander ──╮
+    lines.push(renderHeader(" Commander ", w, theme));
 
     // ─ Tab bar
-    const tabContent = this.renderTabBar();
-    lines.push(boxLine(tabContent, innerWidth, side));
+    lines.push(row(this.renderTabBar(), w, theme));
 
     // ─ Separator: ├──────┤
-    lines.push(bdr("├") + bdr("─".repeat(innerWidth)) + bdr("┤"));
+    lines.push(renderSeparator(w, theme));
 
-    // ─ Content area (two-pane)
-    const contentHeight = CommanderComponent.CONTENT_HEIGHT;
-    const leftWidth = Math.floor(innerWidth * this.leftPaneRatio);
-    const rightWidth = innerWidth - leftWidth - 1; // 1 for middle separator
+    // ─ Content: two-pane via row()
+    const leftWidth = Math.floor(innerW * this.leftPaneRatio);
+    const rightWidth = innerW - leftWidth - 1; // 1 for middle │
 
-    const leftLines = this.renderLeftPane(leftWidth, contentHeight);
-    const rightLines = this.renderRightPane(rightWidth, contentHeight);
+    const leftLines = this.renderLeftPane(leftWidth, CONTENT_HEIGHT);
+    const rightLines = this.renderRightPane(rightWidth, CONTENT_HEIGHT);
 
-    // Merge left and right panes side by side, wrapped in side borders
-    const midSep = bdr("│");
-    for (let i = 0; i < contentHeight; i++) {
-      const left = padToWidth(leftLines[i] || "", leftWidth);
-      const right = padToWidth(rightLines[i] || "", rightWidth);
-      lines.push(side + left + midSep + right + side);
+    const midSep = theme.fg("border", "│");
+    for (let i = 0; i < CONTENT_HEIGHT; i++) {
+      const left = pad(leftLines[i] || "", leftWidth);
+      const right = pad(rightLines[i] || "", rightWidth);
+      // Compose the inner content, then wrap with row()
+      // row() adds │...│ and pads to w, but we need to build innerW content first
+      const inner = left + midSep + right;
+      lines.push(theme.fg("border", "│") + inner + theme.fg("border", "│"));
     }
 
     // ─ Search bar / help
@@ -406,26 +411,29 @@ class CommanderComponent implements Component {
         this.activeTab === "peak"
           ? this.peakSearchQuery
           : this.sessionSearchQuery;
-      const searchContent = acc(" 🔍 ") + query + theme.fg("dim", "█");
-      lines.push(boxLine(searchContent, innerWidth, side));
+      lines.push(row(theme.fg("accent", " 🔍 ") + query + theme.fg("dim", "█"), w, theme));
     } else {
       const helpParts = [
         "↑↓/jk navigate",
         "/ search",
-        "Tab switch panel",
+        "Tab switch",
         "Esc close",
       ];
       if (this.activeTab === "session") {
         helpParts.splice(2, 0, "Enter switch");
       }
-      const helpContent = theme.fg("dim", " " + helpParts.join(" · "));
-      lines.push(boxLine(helpContent, innerWidth, side));
+      lines.push(row(theme.fg("dim", " " + helpParts.join(" · ")), w, theme));
     }
 
-    // ─ Bottom border: ╰──────╯
-    lines.push(bdr("╰") + bdr("─".repeat(innerWidth)) + bdr("╯"));
+    // ─ Footer: ╰──────╯
+    lines.push(renderFooter(
+      this.activeTab === "peak"
+        ? " Peak: conversation turns "
+        : " Session: switch sessions ",
+      w, theme
+    ));
 
-    this.cachedWidth = width;
+    this.cachedWidth = w;
     this.cachedLines = lines;
     return lines;
   }
@@ -493,7 +501,7 @@ class CommanderComponent implements Component {
       const text = ` ${turnNum} ${anchor.preview}`;
 
       if (isSelected) {
-        lines.push(theme.bg("selectedBg", theme.fg("accent", padToWidth(text, width))));
+        lines.push(theme.bg("selectedBg", theme.fg("accent", pad(text, width))));
       } else {
         lines.push(theme.fg("text", truncateToWidth(text, width)));
       }
@@ -501,13 +509,12 @@ class CommanderComponent implements Component {
 
     while (lines.length < height) lines.push("");
 
-    // Scroll indicator
     if (items.length > height) {
       const indicator = `${this.peakScrollOffset + 1}-${Math.min(
         this.peakScrollOffset + height,
         items.length
       )}/${items.length}`;
-      lines[lines.length - 1] = theme.fg("dim", padToWidth(` ${indicator}`, width));
+      lines[lines.length - 1] = theme.fg("dim", pad(` ${indicator}`, width));
     }
 
     return lines;
@@ -590,7 +597,7 @@ class CommanderComponent implements Component {
 
       if (isSelected) {
         const text = ` ${label}${" ".repeat(gap)}${meta}`;
-        lines.push(theme.bg("selectedBg", theme.fg("accent", padToWidth(text, width))));
+        lines.push(theme.bg("selectedBg", theme.fg("accent", pad(text, width))));
       } else {
         const text = ` ${label}${" ".repeat(gap)}${theme.fg("dim", meta)}`;
         lines.push(truncateToWidth(text, width));
@@ -604,7 +611,7 @@ class CommanderComponent implements Component {
         this.sessionScrollOffset + height,
         items.length
       )}/${items.length}`;
-      lines[lines.length - 1] = theme.fg("dim", padToWidth(` ${indicator}`, width));
+      lines[lines.length - 1] = theme.fg("dim", pad(` ${indicator}`, width));
     }
 
     return lines;
@@ -678,34 +685,15 @@ export default function commander(pi: ExtensionAPI) {
     }
 
     // Show the commander UI as overlay
-    await ctx.ui.custom<any>((tui, theme, _kb, done) => {
-      const component = new CommanderComponent(tui, theme, done, {
+    await ctx.ui.custom<any>(
+      (tui, theme, _kb, done) => new CommanderComponent(tui, theme as Theme, done, {
         turns,
         sessions,
         initialTab,
-        onSessionSwitch: (path) => {
-          // Will be handled after ui.custom returns
-        },
-      });
-
-      return {
-        render: (w: number) => component.render(w),
-        invalidate: () => component.invalidate(),
-        handleInput: (data: string) => {
-          component.handleInput(data);
-          tui.requestRender();
-        },
-      };
-    }, {
-      overlay: true,
-      overlayOptions: {
-        anchor: "top-center",
-        offsetY: 3,
-        width: "80%",
-        minWidth: 60,
-        maxHeight: "80%",
-      },
-    });
+        onSessionSwitch: (path) => {},
+      }),
+      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, maxHeight: "80%" } },
+    );
   }
 
   // Register shortcut
