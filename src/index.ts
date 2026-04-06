@@ -106,7 +106,7 @@ function renderSeparator(width: number, theme: Theme): string {
 
 const OVERLAY_WIDTH = "90%";
 const OVERLAY_MIN_WIDTH = 80;
-const CONTENT_HEIGHT = 20;
+const CONTENT_HEIGHT = 40; // large value; overlay maxHeight clips naturally
 
 class CommanderComponent implements Component {
   private tui: TUI;
@@ -636,8 +636,12 @@ class CommanderComponent implements Component {
         styled.push(theme.fg("border", truncateToWidth(line, width)));
       } else if (line.startsWith("[meta] ")) {
         styled.push(theme.fg("dim", truncateToWidth(" " + line.slice(7), width)));
+      } else if (line.startsWith("[U] ")) {
+        styled.push(theme.fg("accent", truncateToWidth(" " + line.slice(4), width)));
+      } else if (line.startsWith("[A] ")) {
+        styled.push(truncateToWidth(" " + line.slice(4), width));
       } else {
-        styled.push(theme.fg("text", truncateToWidth(" " + line, width)));
+        styled.push(truncateToWidth(" " + line, width));
       }
     }
 

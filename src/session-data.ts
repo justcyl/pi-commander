@@ -4,6 +4,8 @@
  * Formats session list items and previews for the session selector.
  */
 
+import { readFileSync } from "node:fs";
+
 export interface SessionItem {
   path: string;
   id: string;
@@ -61,7 +63,7 @@ export function filterSessions(sessions: SessionItem[], query: string): SessionI
 
 /**
  * Format a session preview for the right pane.
- * Shows session ID + date header, then conversation text.
+ * Shows metadata header, then role-tagged conversation messages.
  */
 export function formatSessionPreview(session: SessionItem, width: number): string[] {
   const lines: string[] = [];
@@ -71,12 +73,74 @@ export function formatSessionPreview(session: SessionItem, width: number): strin
   lines.push(`[meta] ${session.id}  ${session.messageCount} msgs  ${relTime}`);
   lines.push("─".repeat(Math.min(width - 1, 50)));
 
-  // Conversation text
-  const text = session.allMessagesText || session.firstMessage || "(empty)";
-  const wrapped = wrapText(text, Math.max(10, width - 1));
-  lines.push(...wrapped);
+  // Load role-tagged messages from session file
+  const messages = loadSessionMessages(session.path);
+  if (messages.length > 0) {
+    for (const msg of messages) {
+      const tag = msg.role === "user" ? "[U]" : "[A]";
+      const msgLines = msg.text.split("\n");
+      for (const ml of msgLines) {
+        if (ml.trim()) lines.push(`${tag} ${ml}`);
+      }
+    }
+  } else {
+    // Fallback to flat text
+    const text = session.allMessagesText || session.firstMessage || "(empty)";
+    const wrapped = wrapText(text, Math.max(10, width - 1));
+    lines.push(...wrapped);
+  }
 
   return lines;
+}
+
+interface RoleMessage {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** Cache for loaded session messages. */
+const messageCache = new Map<string, RoleMessage[]>();
+
+/**
+ * Load user/assistant messages from a session JSONL file.
+ * Cached per session path.
+ */
+function loadSessionMessages(sessionPath: string): RoleMessage[] {
+  if (messageCache.has(sessionPath)) return messageCache.get(sessionPath)!;
+
+  const messages: RoleMessage[] = [];
+  try {
+    const content = readFileSync(sessionPath, "utf-8");
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.type !== "message" || !entry.message) continue;
+        const role = entry.message.role;
+        if (role !== "user" && role !== "assistant") continue;
+
+        let text = "";
+        const c = entry.message.content;
+        if (typeof c === "string") {
+          text = c;
+        } else if (Array.isArray(c)) {
+          text = c
+            .filter((b: any) => b.type === "text" && b.text)
+            .map((b: any) => b.text)
+            .join("\n");
+        }
+        text = text.trim();
+        if (text) messages.push({ role, text });
+      } catch {
+        // skip malformed lines
+      }
+    }
+  } catch {
+    // file not readable
+  }
+
+  messageCache.set(sessionPath, messages);
+  return messages;
 }
 
 /** Simple word-wrap for plain text. */
