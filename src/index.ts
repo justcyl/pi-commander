@@ -106,7 +106,8 @@ function renderSeparator(width: number, theme: Theme): string {
 
 const OVERLAY_WIDTH = "90%";
 const OVERLAY_MIN_WIDTH = 80;
-const this.contentHeight = 40; // large value; overlay maxHeight clips naturally
+const CHROME_LINES = 5; // header + tab bar + separator + help + footer
+const OVERLAY_HEIGHT_RATIO = 0.85;
 
 class CommanderComponent implements Component {
   private tui: TUI;
