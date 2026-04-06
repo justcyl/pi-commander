@@ -106,7 +106,7 @@ function renderSeparator(width: number, theme: Theme): string {
 
 const OVERLAY_WIDTH = "90%";
 const OVERLAY_MIN_WIDTH = 80;
-const CONTENT_HEIGHT = 40; // large value; overlay maxHeight clips naturally
+const this.contentHeight = 40; // large value; overlay maxHeight clips naturally
 
 class CommanderComponent implements Component {
   private tui: TUI;
@@ -259,11 +259,11 @@ class CommanderComponent implements Component {
 
     // Preview paging: left/right or h/l
     if (matchesKey(data, Key.left) || data === "h") {
-      this.previewScrollOffset = Math.max(0, this.previewScrollOffset - CONTENT_HEIGHT);
+      this.previewScrollOffset = Math.max(0, this.previewScrollOffset - this.contentHeight);
       return;
     }
     if (matchesKey(data, Key.right) || data === "l") {
-      this.previewScrollOffset += CONTENT_HEIGHT;
+      this.previewScrollOffset += this.contentHeight;
       return;
     }
   }
@@ -300,11 +300,11 @@ class CommanderComponent implements Component {
 
     // Preview paging: left/right or h/l
     if (matchesKey(data, Key.left) || data === "h") {
-      this.previewScrollOffset = Math.max(0, this.previewScrollOffset - CONTENT_HEIGHT);
+      this.previewScrollOffset = Math.max(0, this.previewScrollOffset - this.contentHeight);
       return;
     }
     if (matchesKey(data, Key.right) || data === "l") {
-      this.previewScrollOffset += CONTENT_HEIGHT;
+      this.previewScrollOffset += this.contentHeight;
       return;
     }
   }
@@ -375,23 +375,27 @@ class CommanderComponent implements Component {
   private adjustPeakScroll(): void {
     if (this.peakSelectedIndex < this.peakScrollOffset) {
       this.peakScrollOffset = this.peakSelectedIndex;
-    } else if (this.peakSelectedIndex >= this.peakScrollOffset + CONTENT_HEIGHT) {
-      this.peakScrollOffset = this.peakSelectedIndex - CONTENT_HEIGHT + 1;
+    } else if (this.peakSelectedIndex >= this.peakScrollOffset + this.contentHeight) {
+      this.peakScrollOffset = this.peakSelectedIndex - this.contentHeight + 1;
     }
   }
 
   private adjustSessionScroll(): void {
     if (this.sessionSelectedIndex < this.sessionScrollOffset) {
       this.sessionScrollOffset = this.sessionSelectedIndex;
-    } else if (this.sessionSelectedIndex >= this.sessionScrollOffset + CONTENT_HEIGHT) {
-      this.sessionScrollOffset = this.sessionSelectedIndex - CONTENT_HEIGHT + 1;
+    } else if (this.sessionSelectedIndex >= this.sessionScrollOffset + this.contentHeight) {
+      this.sessionScrollOffset = this.sessionSelectedIndex - this.contentHeight + 1;
     }
   }
 
   // ─── Rendering ──────────────────────────────────────────────
 
   render(width: number): string[] {
-    const w = width; // overlay framework already constrains to OVERLAY_WIDTH
+    const w = width;
+
+    // Compute content height from terminal size
+    const termHeight = (this.tui as any).height || 40;
+    this.contentHeight = Math.max(5, Math.floor(termHeight * OVERLAY_HEIGHT_RATIO) - CHROME_LINES);
 
     if (this.cachedLines && this.cachedWidth === w) {
       return this.cachedLines;
@@ -414,11 +418,11 @@ class CommanderComponent implements Component {
     const leftWidth = Math.floor(innerW * this.leftPaneRatio);
     const rightWidth = innerW - leftWidth - 1; // 1 for middle │
 
-    const leftLines = this.renderLeftPane(leftWidth, CONTENT_HEIGHT);
-    const rightLines = this.renderRightPane(rightWidth, CONTENT_HEIGHT);
+    const leftLines = this.renderLeftPane(leftWidth, this.contentHeight);
+    const rightLines = this.renderRightPane(rightWidth, this.contentHeight);
 
     const midSep = theme.fg("border", "│");
-    for (let i = 0; i < CONTENT_HEIGHT; i++) {
+    for (let i = 0; i < this.contentHeight; i++) {
       const left = pad(leftLines[i] || "", leftWidth);
       const right = pad(rightLines[i] || "", rightWidth);
       // Compose the inner content, then wrap with row()
