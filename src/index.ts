@@ -104,7 +104,8 @@ function renderSeparator(width: number, theme: Theme): string {
 
 // ─── Main Commander Component ────────────────────────────────────────
 
-const OVERLAY_WIDTH = "80%" as const;
+const OVERLAY_WIDTH = "80%";
+const OVERLAY_MIN_WIDTH = 80;
 const CONTENT_HEIGHT = 14;
 
 class CommanderComponent implements Component {
@@ -368,7 +369,7 @@ class CommanderComponent implements Component {
   // ─── Rendering ──────────────────────────────────────────────
 
   render(width: number): string[] {
-    const w = Math.min(width, OVERLAY_WIDTH);
+    const w = width; // overlay framework already constrains to OVERLAY_WIDTH
 
     if (this.cachedLines && this.cachedWidth === w) {
       return this.cachedLines;
@@ -674,7 +675,7 @@ export default function commander(pi: ExtensionAPI) {
         initialTab,
         onSessionSwitch: (path) => {},
       }),
-      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: 80, maxHeight: "80%" } },
+      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: OVERLAY_MIN_WIDTH, maxHeight: "80%" } },
     );
   }
 
