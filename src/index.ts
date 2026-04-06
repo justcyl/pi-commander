@@ -133,7 +133,9 @@ class CommanderComponent implements Component {
   private sessionScrollOffset = 0;
   private sessionSearchMode = false;
   private sessionSearchQuery = "";
-  private sessionSwitchCallback?: (path: string) => void;
+
+  // Preview scroll (right pane paging)
+  private previewScrollOffset = 0;
 
   // Layout
   private leftPaneRatio = 0.35;
@@ -146,15 +148,12 @@ class CommanderComponent implements Component {
       turns: Turn[];
       sessions: SessionItem[];
       initialTab?: TabId;
-      onSessionSwitch?: (path: string) => void;
     }
   ) {
     this.tui = tui;
     this.theme = theme;
     this.done = done;
     this.activeTab = options.initialTab || "peak";
-    this.sessionSwitchCallback = options.onSessionSwitch;
-
     // Init peak data
     this.turns = options.turns;
     this.anchors = extractAnchors(this.turns);
@@ -170,21 +169,25 @@ class CommanderComponent implements Component {
     if (!this.isSearchMode()) {
       if (data === "1") {
         this.activeTab = "peak";
+        this.previewScrollOffset = 0;
         this.invalidate();
         return;
       }
       if (data === "2") {
         this.activeTab = "session";
+        this.previewScrollOffset = 0;
         this.invalidate();
         return;
       }
       if (matchesKey(data, Key.tab)) {
         this.activeTab = this.activeTab === "peak" ? "session" : "peak";
+        this.previewScrollOffset = 0;
         this.invalidate();
         return;
       }
       if (matchesKey(data, Key.shift("tab"))) {
         this.activeTab = this.activeTab === "peak" ? "session" : "peak";
+        this.previewScrollOffset = 0;
         this.invalidate();
         return;
       }
@@ -227,6 +230,7 @@ class CommanderComponent implements Component {
 
     if (matchesKey(data, Key.up) || data === "k") {
       this.peakSelectedIndex = Math.max(0, this.peakSelectedIndex - 1);
+      this.previewScrollOffset = 0;
       this.adjustPeakScroll();
       return;
     }
@@ -235,18 +239,31 @@ class CommanderComponent implements Component {
         this.filteredAnchors.length - 1,
         this.peakSelectedIndex + 1
       );
+      this.previewScrollOffset = 0;
       this.adjustPeakScroll();
       return;
     }
 
     if (matchesKey(data, Key.home) || data === "g") {
       this.peakSelectedIndex = 0;
+      this.previewScrollOffset = 0;
       this.adjustPeakScroll();
       return;
     }
     if (matchesKey(data, Key.end) || data === "G") {
       this.peakSelectedIndex = Math.max(0, this.filteredAnchors.length - 1);
+      this.previewScrollOffset = 0;
       this.adjustPeakScroll();
+      return;
+    }
+
+    // Preview paging: left/right or h/l
+    if (matchesKey(data, Key.left) || data === "h") {
+      this.previewScrollOffset = Math.max(0, this.previewScrollOffset - CONTENT_HEIGHT);
+      return;
+    }
+    if (matchesKey(data, Key.right) || data === "l") {
+      this.previewScrollOffset += CONTENT_HEIGHT;
       return;
     }
   }
@@ -267,6 +284,7 @@ class CommanderComponent implements Component {
 
     if (matchesKey(data, Key.up) || data === "k") {
       this.sessionSelectedIndex = Math.max(0, this.sessionSelectedIndex - 1);
+      this.previewScrollOffset = 0;
       this.adjustSessionScroll();
       return;
     }
@@ -275,14 +293,24 @@ class CommanderComponent implements Component {
         this.filteredSessions.length - 1,
         this.sessionSelectedIndex + 1
       );
+      this.previewScrollOffset = 0;
       this.adjustSessionScroll();
+      return;
+    }
+
+    // Preview paging: left/right or h/l
+    if (matchesKey(data, Key.left) || data === "h") {
+      this.previewScrollOffset = Math.max(0, this.previewScrollOffset - CONTENT_HEIGHT);
+      return;
+    }
+    if (matchesKey(data, Key.right) || data === "l") {
+      this.previewScrollOffset += CONTENT_HEIGHT;
       return;
     }
 
     if (matchesKey(data, Key.enter)) {
       const selected = this.filteredSessions[this.sessionSelectedIndex];
-      if (selected && this.sessionSwitchCallback) {
-        this.sessionSwitchCallback(selected.path);
+      if (selected) {
         this.done({ action: "switch", path: selected.path });
       }
       return;
@@ -340,12 +368,14 @@ class CommanderComponent implements Component {
     this.filteredAnchors = filterAnchors(this.anchors, this.peakSearchQuery);
     this.peakSelectedIndex = 0;
     this.peakScrollOffset = 0;
+    this.previewScrollOffset = 0;
   }
 
   private applySessionFilter(): void {
     this.filteredSessions = filterSessions(this.sessions, this.sessionSearchQuery);
     this.sessionSelectedIndex = 0;
     this.sessionScrollOffset = 0;
+    this.previewScrollOffset = 0;
   }
 
   // ─── Scroll management ─────────────────────────────────────
@@ -414,7 +444,8 @@ class CommanderComponent implements Component {
       lines.push(row(theme.fg("accent", " 🔍 ") + query + theme.fg("dim", "█"), w, theme));
     } else {
       const helpParts = [
-        "↑↓/jk navigate",
+        "↑↓ navigate",
+        "←→ page preview",
         "/ search",
         "Tab switch",
         "Esc close",
@@ -549,10 +580,10 @@ class CommanderComponent implements Component {
       }
     }
 
-    return styled.slice(0, height);
-  }
-
-  // ─── Session rendering ──────────────────────────────────────
+    // Apply preview scroll offset and clamp
+    const maxOffset = Math.max(0, styled.length - height);
+    if (this.previewScrollOffset > maxOffset) this.previewScrollOffset = maxOffset;
+    return styled.slice(this.previewScrollOffset, this.previewScrollOffset + height);────────────────────────────────────
 
   private renderSessionLeft(width: number, height: number): string[] {
     const theme = this.theme;
@@ -614,7 +645,10 @@ class CommanderComponent implements Component {
       styled.push(truncateToWidth(" " + line, width));
     }
 
-    return styled.slice(0, height);
+    // Apply preview scroll offset and clamp
+    const maxOffset = Math.max(0, styled.length - height);
+    if (this.previewScrollOffset > maxOffset) this.previewScrollOffset = maxOffset;
+    return styled.slice(this.previewScrollOffset, this.previewScrollOffset + height);
   }
 
   invalidate(): void {
@@ -657,15 +691,19 @@ export default function commander(pi: ExtensionAPI) {
     }
 
     // Show the commander UI as overlay
-    await ctx.ui.custom<any>(
+    const result = await ctx.ui.custom<any>(
       (tui, theme, _kb, done) => new CommanderComponent(tui, theme as Theme, done, {
         turns,
         sessions,
         initialTab,
-        onSessionSwitch: (path) => {},
       }),
       { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: OVERLAY_MIN_WIDTH, maxHeight: "90%" } },
     );
+
+    // Handle session switch
+    if (result && result.action === "switch" && result.path) {
+      pi.sendUserMessage(`/resume ${result.path}`);
+    }
   }
 
   // Register shortcut
