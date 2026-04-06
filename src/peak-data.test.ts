@@ -223,9 +223,12 @@ describe("formatTurnPreview", () => {
     const preview = formatTurnPreview(turns[0], 80);
     expect(preview).toContain("What is 2+2?");
     expect(preview).toContain("The answer is 4.");
+    // Uses [U]/[A] role tags
+    expect(preview).toContain("[U]");
+    expect(preview).toContain("[A]");
   });
 
-  it("should include tool call summaries", () => {
+  it("should filter out tool calls and results", () => {
     const entries = [
       makeUserEntry("u1", null, "Run ls"),
       makeAssistantEntry("a1", "u1", "Sure", [{ id: "tc1", name: "bash", arguments: { command: "ls" } }]),
@@ -234,14 +237,14 @@ describe("formatTurnPreview", () => {
     ];
     const turns = extractTurns(entries as any);
     const preview = formatTurnPreview(turns[0], 80);
-    // Should show user + assistant text, but NOT tool calls/results
     expect(preview).toContain("Run ls");
     expect(preview).toContain("Sure");
     expect(preview).toContain("Done");
     expect(preview).not.toContain("file1.ts");
+    expect(preview).not.toContain("bash");
   });
 
-  it("should truncate very long tool results", () => {
+  it("should not contain tool output", () => {
     const longResult = "x".repeat(1000);
     const entries = [
       makeUserEntry("u1", null, "Run cmd"),
@@ -250,7 +253,6 @@ describe("formatTurnPreview", () => {
     ];
     const turns = extractTurns(entries as any);
     const preview = formatTurnPreview(turns[0], 80);
-    // Tool results are filtered out, so only user + assistant text
     expect(preview).toContain("Run cmd");
     expect(preview).toContain("OK");
     expect(preview).not.toContain("xxxx");

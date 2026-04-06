@@ -569,12 +569,10 @@ class CommanderComponent implements Component {
 
     const styled: string[] = [];
     for (const line of previewLines) {
-      if (line.startsWith("┌ User")) {
-        styled.push(theme.fg("accent", truncateToWidth(line, width)));
-      } else if (line.startsWith("┌ Assistant")) {
-        styled.push(theme.fg("success", truncateToWidth(line, width)));
-      } else if (line.startsWith("─")) {
-        styled.push(theme.fg("border", truncateToWidth(line, width)));
+      if (line.startsWith("[U] ")) {
+        styled.push(theme.fg("accent", truncateToWidth(" " + line.slice(4), width)));
+      } else if (line.startsWith("[A] ")) {
+        styled.push(truncateToWidth(" " + line.slice(4), width));
       } else {
         styled.push(truncateToWidth(" " + line, width));
       }
@@ -705,15 +703,18 @@ export default function commander(pi: ExtensionAPI) {
 
     // Handle session switch
     if (result && result.action === "switch" && result.path) {
-      pi.sendUserMessage(`/resume ${result.path}`);
+      // switchSession is only on ExtensionCommandContext (commands)
+      if ("switchSession" in ctx) {
+        await (ctx as ExtensionCommandContext).switchSession(result.path);
+      }
     }
   }
 
-  // Register shortcut
+  // Register shortcut — delegates to /commander command for full ExtensionCommandContext
   pi.registerShortcut(Key.ctrlShift("k"), {
     description: "Open Commander palette",
-    handler: async (ctx) => {
-      await openCommander(ctx);
+    handler: async (_ctx) => {
+      pi.sendUserMessage("/commander");
     },
   });
 

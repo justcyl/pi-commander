@@ -136,43 +136,54 @@ export function filterAnchors(anchors: TurnAnchor[], query: string): TurnAnchor[
 
 /**
  * Format a full turn for the right-pane preview.
- * Returns an array of plain-text lines (TUI rendering adds styling later).
+ * Returns lines tagged with role prefix for color styling.
+ * Lines starting with "[U] " are user, "[A] " are assistant.
  */
-export function formatTurnPreview(turn: Turn, width: number): string {
+export function formatTurnPreview(turn: Turn, _width: number): string {
   const lines: string[] = [];
-  const sep = "─".repeat(Math.min(width, 60));
 
   // User message
-  lines.push("┌ User");
-  lines.push(sep);
-  const userText = extractTextContent(turn.userEntry.message?.content);
-  lines.push(userText);
-  lines.push("");
+  const userText = extractTextContent(turn.userEntry.message?.content).trim();
+  if (userText) {
+    for (const line of userText.split("\n")) {
+      lines.push(`[U] ${line}`);
+    }
+  }
 
   // Assistant text only (filter out tool calls, tool results, thinking)
   for (const aEntry of turn.assistantEntries) {
     const blocks = aEntry.message?.content;
     if (!blocks) continue;
 
+    let text = "";
     if (typeof blocks === "string") {
-      lines.push("┌ Assistant");
-      lines.push(sep);
-      lines.push(blocks);
-      lines.push("");
+      text = blocks;
     } else if (Array.isArray(blocks)) {
-      const textParts = blocks
+      text = blocks
         .filter((b) => b.type === "text" && b.text)
-        .map((b) => b.text!);
-      if (textParts.length > 0) {
-        lines.push("┌ Assistant");
-        lines.push(sep);
-        lines.push(textParts.join("\n"));
-        lines.push("");
+        .map((b) => b.text!)
+        .join("\n");
+    }
+
+    text = text.trim();
+    if (text) {
+      for (const line of text.split("\n")) {
+        lines.push(`[A] ${line}`);
       }
     }
   }
 
-  return lines.join("\n");
+  // Collapse consecutive empty-content lines
+  const result: string[] = [];
+  for (const line of lines) {
+    const content = line.slice(4); // after "[U] " or "[A] "
+    if (content === "" && result.length > 0 && result[result.length - 1].slice(4) === "") {
+      continue; // skip consecutive blank
+    }
+    result.push(line);
+  }
+
+  return result.join("\n");
 }
 
 function summarizeArgs(args: Record<string, unknown> | undefined): string {
