@@ -307,14 +307,7 @@ class CommanderComponent implements Component {
       this.previewScrollOffset += CONTENT_HEIGHT;
       return;
     }
-
-    if (matchesKey(data, Key.enter)) {
-      const selected = this.filteredSessions[this.sessionSelectedIndex];
-      if (selected) {
-        this.done({ action: "switch", path: selected.path });
-      }
-      return;
-    }
+  }
   }
 
   // ─── Search handling ────────────────────────────────────────
@@ -450,9 +443,6 @@ class CommanderComponent implements Component {
         "Tab switch",
         "Esc close",
       ];
-      if (this.activeTab === "session") {
-        helpParts.splice(2, 0, "Enter switch");
-      }
       lines.push(row(theme.fg("dim", " " + helpParts.join(" · ")), w, theme));
     }
 
@@ -643,7 +633,13 @@ class CommanderComponent implements Component {
 
     const styled: string[] = [];
     for (const line of preview) {
-      styled.push(truncateToWidth(" " + line, width));
+      if (line.startsWith("─")) {
+        styled.push(theme.fg("border", truncateToWidth(line, width)));
+      } else if (line.startsWith("[meta] ")) {
+        styled.push(theme.fg("dim", truncateToWidth(" " + line.slice(7), width)));
+      } else {
+        styled.push(theme.fg("text", truncateToWidth(" " + line, width)));
+      }
     }
 
     // Apply preview scroll offset and clamp
@@ -692,7 +688,7 @@ export default function commander(pi: ExtensionAPI) {
     }
 
     // Show the commander UI as overlay
-    const result = await ctx.ui.custom<any>(
+    await ctx.ui.custom<any>(
       (tui, theme, _kb, done) => new CommanderComponent(tui, theme as Theme, done, {
         turns,
         sessions,
@@ -700,21 +696,13 @@ export default function commander(pi: ExtensionAPI) {
       }),
       { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: OVERLAY_MIN_WIDTH, maxHeight: "90%" } },
     );
-
-    // Handle session switch
-    if (result && result.action === "switch" && result.path) {
-      // switchSession is only on ExtensionCommandContext (commands)
-      if ("switchSession" in ctx) {
-        await (ctx as ExtensionCommandContext).switchSession(result.path);
-      }
-    }
   }
 
-  // Register shortcut — delegates to /commander command for full ExtensionCommandContext
+  // Register shortcut
   pi.registerShortcut(Key.ctrlShift("k"), {
     description: "Open Commander palette",
-    handler: async (_ctx) => {
-      pi.sendUserMessage("/commander");
+    handler: async (ctx) => {
+      await openCommander(ctx);
     },
   });
 

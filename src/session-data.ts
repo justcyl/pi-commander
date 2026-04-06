@@ -68,7 +68,7 @@ export function formatSessionPreview(session: SessionItem, width: number): strin
 
   // Metadata header
   const relTime = formatRelativeTime(session.modified);
-  lines.push(`${session.id}  ${session.messageCount} msgs  ${relTime}`);
+  lines.push(`[meta] ${session.id}  ${session.messageCount} msgs  ${relTime}`);
   lines.push("─".repeat(Math.min(width - 1, 50)));
 
   // Conversation text
