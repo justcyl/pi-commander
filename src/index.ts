@@ -583,7 +583,10 @@ class CommanderComponent implements Component {
     // Apply preview scroll offset and clamp
     const maxOffset = Math.max(0, styled.length - height);
     if (this.previewScrollOffset > maxOffset) this.previewScrollOffset = maxOffset;
-    return styled.slice(this.previewScrollOffset, this.previewScrollOffset + height);────────────────────────────────────
+    return styled.slice(this.previewScrollOffset, this.previewScrollOffset + height);
+  }
+
+  // ─── Session rendering ──────────────────────────────────────
 
   private renderSessionLeft(width: number, height: number): string[] {
     const theme = this.theme;
