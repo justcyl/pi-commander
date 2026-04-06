@@ -112,15 +112,36 @@ describe("formatSessionPreview", () => {
     expect(preview.length).toBeGreaterThan(0);
   });
 
-  it("should include session metadata", () => {
+  it("should show allMessagesText content", () => {
     const session = makeSessionInfo({
-      name: "Test Session",
-      cwd: "/home/user/myproject",
-      messageCount: 42,
+      allMessagesText: "Hello help me project code fix bug test",
     });
     const preview = formatSessionPreview(session, 80);
-    const text = preview.join("\n");
-    expect(text).toContain("42");
-    expect(text).toContain("myproject");
+    const text = preview.join(" ");
+    expect(text).toContain("Hello");
+    expect(text).toContain("fix");
+  });
+
+  it("should fallback to firstMessage when allMessagesText is empty", () => {
+    const session = makeSessionInfo({
+      allMessagesText: "",
+      firstMessage: "Hello, help me",
+    });
+    const preview = formatSessionPreview(session, 80);
+    const text = preview.join(" ");
+    expect(text).toContain("Hello");
+  });
+
+  it("should word-wrap long text", () => {
+    const session = makeSessionInfo({
+      allMessagesText: "word ".repeat(100),
+    });
+    const preview = formatSessionPreview(session, 40);
+    // Should produce multiple lines
+    expect(preview.length).toBeGreaterThan(1);
+    // Each line should fit within width
+    for (const line of preview) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
   });
 });

@@ -61,38 +61,35 @@ export function filterSessions(sessions: SessionItem[], query: string): SessionI
 
 /**
  * Format a session preview for the right pane.
- * Returns lines of text.
+ * Shows conversation text (all user + assistant messages), wrapped to width.
  */
 export function formatSessionPreview(session: SessionItem, width: number): string[] {
+  const text = session.allMessagesText || session.firstMessage || "(empty)";
+  // Wrap text into lines that fit within width
+  return wrapText(text, Math.max(10, width - 1));
+}
+
+/** Simple word-wrap for plain text. */
+function wrapText(text: string, maxWidth: number): string[] {
   const lines: string[] = [];
-  const sep = "─".repeat(Math.min(width, 60));
-
-  // Header
-  if (session.name) {
-    lines.push(`📌 ${session.name}`);
+  const paragraphs = text.split(/\n/);
+  for (const para of paragraphs) {
+    if (!para.trim()) {
+      lines.push("");
+      continue;
+    }
+    let current = "";
+    for (const word of para.split(/\s+/)) {
+      if (!word) continue;
+      if (current.length + word.length + 1 > maxWidth) {
+        if (current) lines.push(current);
+        current = word.length > maxWidth ? word.slice(0, maxWidth) : word;
+      } else {
+        current = current ? current + " " + word : word;
+      }
+    }
+    if (current) lines.push(current);
   }
-
-  lines.push(sep);
-
-  // Metadata
-  lines.push(`📁 ${session.cwd}`);
-  lines.push(`💬 ${session.messageCount} messages`);
-  lines.push(`📅 Created: ${session.created.toLocaleString()}`);
-  lines.push(`📅 Modified: ${session.modified.toLocaleString()}`);
-
-  if (session.parentSessionPath) {
-    lines.push(`🔗 Forked from: ${session.parentSessionPath}`);
-  }
-
-  lines.push(sep);
-
-  // First message preview
-  lines.push("First message:");
-  const firstMsg = session.firstMessage || "(empty)";
-  const truncated =
-    firstMsg.length > 500 ? firstMsg.slice(0, 500) + "..." : firstMsg;
-  lines.push(truncated);
-
   return lines;
 }
 

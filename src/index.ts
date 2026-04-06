@@ -39,7 +39,6 @@ import {
   filterSessions,
   formatSessionPreview,
   type SessionItem,
-  type SessionListItem,
 } from "./session-data.js";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -105,7 +104,7 @@ function renderSeparator(width: number, theme: Theme): string {
 
 // ─── Main Commander Component ────────────────────────────────────────
 
-const OVERLAY_WIDTH = 100;
+const OVERLAY_WIDTH = "80%" as const;
 const CONTENT_HEIGHT = 14;
 
 class CommanderComponent implements Component {
@@ -586,21 +585,12 @@ class CommanderComponent implements Component {
       const globalIdx = this.sessionScrollOffset + i;
       const isSelected = globalIdx === this.sessionSelectedIndex;
       const item = formatSessionList(session);
-
-      // Show label + meta (msg count & time)
-      const meta = item.meta;
-      const metaWidth = visibleWidth(meta);
-      const maxLabelWidth = Math.max(10, width - metaWidth - 3);
-      const label = truncateToWidth(item.label, maxLabelWidth, "");
-      const labelWidth = visibleWidth(label);
-      const gap = Math.max(1, width - 1 - labelWidth - metaWidth);
+      const text = ` ${item.label}`;
 
       if (isSelected) {
-        const text = ` ${label}${" ".repeat(gap)}${meta}`;
         lines.push(theme.bg("selectedBg", theme.fg("accent", pad(text, width))));
       } else {
-        const text = ` ${label}${" ".repeat(gap)}${theme.fg("dim", meta)}`;
-        lines.push(truncateToWidth(text, width));
+        lines.push(theme.fg("text", truncateToWidth(text, width)));
       }
     }
 
@@ -631,15 +621,7 @@ class CommanderComponent implements Component {
 
     const styled: string[] = [];
     for (const line of preview) {
-      if (line.startsWith("📌") || line.startsWith("📁") || line.startsWith("💬") || line.startsWith("📅") || line.startsWith("🔗")) {
-        styled.push(truncateToWidth(theme.fg("accent", " " + line), width));
-      } else if (line.startsWith("─")) {
-        styled.push(theme.fg("border", truncateToWidth(line, width)));
-      } else if (line === "First message:") {
-        styled.push(theme.fg("muted", truncateToWidth(" " + line, width)));
-      } else {
-        styled.push(truncateToWidth(" " + line, width));
-      }
+      styled.push(truncateToWidth(" " + line, width));
     }
 
     return styled.slice(0, height);
@@ -692,7 +674,7 @@ export default function commander(pi: ExtensionAPI) {
         initialTab,
         onSessionSwitch: (path) => {},
       }),
-      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, maxHeight: "80%" } },
+      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: 80, maxHeight: "80%" } },
     );
   }
 
