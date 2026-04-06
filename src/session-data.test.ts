@@ -112,14 +112,17 @@ describe("formatSessionPreview", () => {
     expect(preview.length).toBeGreaterThan(0);
   });
 
-  it("should show allMessagesText content", () => {
+  it("should show ID and date metadata header", () => {
     const session = makeSessionInfo({
-      allMessagesText: "Hello help me project code fix bug test",
+      id: "abc-123",
+      messageCount: 42,
+      allMessagesText: "Hello help me project",
     });
     const preview = formatSessionPreview(session, 80);
-    const text = preview.join(" ");
+    const text = preview.join("\n");
+    expect(text).toContain("abc-123");
+    expect(text).toContain("42");
     expect(text).toContain("Hello");
-    expect(text).toContain("fix");
   });
 
   it("should fallback to firstMessage when allMessagesText is empty", () => {

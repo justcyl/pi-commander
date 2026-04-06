@@ -61,12 +61,22 @@ export function filterSessions(sessions: SessionItem[], query: string): SessionI
 
 /**
  * Format a session preview for the right pane.
- * Shows conversation text (all user + assistant messages), wrapped to width.
+ * Shows session ID + date header, then conversation text.
  */
 export function formatSessionPreview(session: SessionItem, width: number): string[] {
+  const lines: string[] = [];
+
+  // Metadata header
+  const relTime = formatRelativeTime(session.modified);
+  lines.push(`${session.id}  ${session.messageCount} msgs  ${relTime}`);
+  lines.push("─".repeat(Math.min(width - 1, 50)));
+
+  // Conversation text
   const text = session.allMessagesText || session.firstMessage || "(empty)";
-  // Wrap text into lines that fit within width
-  return wrapText(text, Math.max(10, width - 1));
+  const wrapped = wrapText(text, Math.max(10, width - 1));
+  lines.push(...wrapped);
+
+  return lines;
 }
 
 /** Simple word-wrap for plain text. */

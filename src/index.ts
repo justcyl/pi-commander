@@ -104,9 +104,9 @@ function renderSeparator(width: number, theme: Theme): string {
 
 // ─── Main Commander Component ────────────────────────────────────────
 
-const OVERLAY_WIDTH = "80%";
+const OVERLAY_WIDTH = "90%";
 const OVERLAY_MIN_WIDTH = 80;
-const CONTENT_HEIGHT = 14;
+const CONTENT_HEIGHT = 20;
 
 class CommanderComponent implements Component {
   private tui: TUI;
@@ -542,19 +542,8 @@ class CommanderComponent implements Component {
         styled.push(theme.fg("accent", truncateToWidth(line, width)));
       } else if (line.startsWith("┌ Assistant")) {
         styled.push(theme.fg("success", truncateToWidth(line, width)));
-      } else if (line.startsWith("┌ Tool Result")) {
-        styled.push(
-          theme.fg(
-            line.includes("❌") ? "error" : "warning",
-            truncateToWidth(line, width)
-          )
-        );
       } else if (line.startsWith("─")) {
         styled.push(theme.fg("border", truncateToWidth(line, width)));
-      } else if (line.startsWith("  ⚡")) {
-        styled.push(theme.fg("warning", truncateToWidth(line, width)));
-      } else if (line.startsWith("  💭")) {
-        styled.push(theme.fg("dim", truncateToWidth(line, width)));
       } else {
         styled.push(truncateToWidth(" " + line, width));
       }
@@ -675,7 +664,7 @@ export default function commander(pi: ExtensionAPI) {
         initialTab,
         onSessionSwitch: (path) => {},
       }),
-      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: OVERLAY_MIN_WIDTH, maxHeight: "80%" } },
+      { overlay: true, overlayOptions: { anchor: "center", width: OVERLAY_WIDTH, minWidth: OVERLAY_MIN_WIDTH, maxHeight: "90%" } },
     );
   }
 

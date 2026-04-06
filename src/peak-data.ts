@@ -149,45 +149,27 @@ export function formatTurnPreview(turn: Turn, width: number): string {
   lines.push(userText);
   lines.push("");
 
-  // Assistant + tool calls interleaved
+  // Assistant text only (filter out tool calls, tool results, thinking)
   for (const aEntry of turn.assistantEntries) {
     const blocks = aEntry.message?.content;
     if (!blocks) continue;
 
-    lines.push("┌ Assistant");
-    lines.push(sep);
-
     if (typeof blocks === "string") {
+      lines.push("┌ Assistant");
+      lines.push(sep);
       lines.push(blocks);
+      lines.push("");
     } else if (Array.isArray(blocks)) {
-      for (const block of blocks) {
-        if (block.type === "text" && block.text) {
-          lines.push(block.text);
-        } else if (block.type === "toolCall") {
-          lines.push(`  ⚡ ${block.name}(${summarizeArgs(block.arguments)})`);
-        } else if (block.type === "thinking" && block.thinking) {
-          const preview =
-            block.thinking.length > 200
-              ? block.thinking.slice(0, 200) + "..."
-              : block.thinking;
-          lines.push(`  💭 ${preview}`);
-        }
+      const textParts = blocks
+        .filter((b) => b.type === "text" && b.text)
+        .map((b) => b.text!);
+      if (textParts.length > 0) {
+        lines.push("┌ Assistant");
+        lines.push(sep);
+        lines.push(textParts.join("\n"));
+        lines.push("");
       }
     }
-    lines.push("");
-  }
-
-  // Tool results
-  for (const trEntry of turn.toolResultEntries) {
-    const msg = trEntry.message!;
-    const resultText = extractTextContent(msg.content);
-    const truncated =
-      resultText.length > 500 ? resultText.slice(0, 500) + "\n... (truncated)" : resultText;
-
-    lines.push(`┌ Tool Result: ${msg.toolName} ${msg.isError ? "❌" : "✓"}`);
-    lines.push(sep);
-    lines.push(truncated);
-    lines.push("");
   }
 
   return lines.join("\n");

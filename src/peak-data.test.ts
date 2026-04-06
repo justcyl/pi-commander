@@ -234,8 +234,11 @@ describe("formatTurnPreview", () => {
     ];
     const turns = extractTurns(entries as any);
     const preview = formatTurnPreview(turns[0], 80);
-    expect(preview).toContain("bash");
-    expect(preview).toContain("file1.ts");
+    // Should show user + assistant text, but NOT tool calls/results
+    expect(preview).toContain("Run ls");
+    expect(preview).toContain("Sure");
+    expect(preview).toContain("Done");
+    expect(preview).not.toContain("file1.ts");
   });
 
   it("should truncate very long tool results", () => {
@@ -247,7 +250,9 @@ describe("formatTurnPreview", () => {
     ];
     const turns = extractTurns(entries as any);
     const preview = formatTurnPreview(turns[0], 80);
-    // Should be truncated, not contain all 1000 chars
-    expect(preview.length).toBeLessThan(longResult.length);
+    // Tool results are filtered out, so only user + assistant text
+    expect(preview).toContain("Run cmd");
+    expect(preview).toContain("OK");
+    expect(preview).not.toContain("xxxx");
   });
 });
