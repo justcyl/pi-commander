@@ -308,7 +308,6 @@ class CommanderComponent implements Component {
       return;
     }
   }
-  }
 
   // ─── Search handling ────────────────────────────────────────
 
